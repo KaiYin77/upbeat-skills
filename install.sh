@@ -39,31 +39,27 @@ else
     echo "Installing globally: $DEST"
 fi
 
+mkdir -p "$DEST"
+
 # ── install one skill ───────────────────────────────────────────────────────
+# skills/ mirrors .claude/commands/ exactly:
+#   skills/mcu.md        → commands/mcu.md
+#   skills/mcu/          → commands/mcu/
 install_skill() {
     local name="$1"
-    local skill_dir="$SKILLS_DIR/$name"
 
-    if [ ! -d "$skill_dir" ]; then
-        echo "Error: skill '$name' not found in $SKILLS_DIR" >&2
+    if [ ! -f "$SKILLS_DIR/$name.md" ]; then
+        echo "Error: skill '$name' not found (missing $SKILLS_DIR/$name.md)" >&2
         exit 1
     fi
 
     echo "  Installing: $name"
-    mkdir -p "$DEST/$name"
+    cp "$SKILLS_DIR/$name.md" "$DEST/$name.md"
 
-    # copy skill markdown (e.g. mcu.md → commands/mcu.md)
-    if [ -f "$skill_dir/$name.md" ]; then
-        cp "$skill_dir/$name.md" "$DEST/$name.md"
+    if [ -d "$SKILLS_DIR/$name" ]; then
+        mkdir -p "$DEST/$name"
+        cp -r "$SKILLS_DIR/$name/." "$DEST/$name/"
     fi
-
-    # copy all companion files into commands/<name>/
-    for f in "$skill_dir"/*; do
-        fname="$(basename "$f")"
-        if [ "$fname" != "$name.md" ]; then
-            cp "$f" "$DEST/$name/$fname"
-        fi
-    done
 
     echo "  -> /$name skill ready"
 }
@@ -72,9 +68,9 @@ install_skill() {
 if [ -n "$SKILL_FILTER" ]; then
     install_skill "$SKILL_FILTER"
 else
-    for skill_dir in "$SKILLS_DIR"/*/; do
-        [ -d "$skill_dir" ] || continue
-        install_skill "$(basename "$skill_dir")"
+    for md in "$SKILLS_DIR"/*.md; do
+        [ -f "$md" ] || continue
+        install_skill "$(basename "$md" .md)"
     done
 fi
 
