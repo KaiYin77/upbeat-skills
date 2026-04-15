@@ -59,7 +59,13 @@ RECV_TIMEOUT = 3.0      # seconds to wait for mcu> after a normal command
 
 def open_port(port: str, baud: int) -> serial.Serial:
     try:
-        ser = serial.Serial(port, baud, timeout=RECV_TIMEOUT)
+        ser = serial.Serial()
+        ser.port     = port
+        ser.baudrate = baud
+        ser.timeout  = RECV_TIMEOUT
+        ser.dsrdtr   = False   # don't auto-toggle DTR on open (avoids resetting a running board)
+        ser.rtscts   = False
+        ser.open()
     except serial.SerialException as e:
         print(f"[error] cannot open {port}: {e}", file=sys.stderr)
         sys.exit(1)
@@ -501,7 +507,9 @@ def main():
     print(f"Connecting to Trina-Pi-UP201 on {port} @ {cfg.baud}\u2026")
     ser = open_port(port, cfg.baud)
 
-    alive = reset_and_wait(ser)
+    alive = wait_for_prompt(ser)
+    if not alive:
+        alive = reset_and_wait(ser)
     if not alive:
         alive = wait_for_prompt(ser)
 
