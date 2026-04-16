@@ -97,14 +97,25 @@ FACES = {
 }
 
 REACTIONS = {
-    "sleeping": ["No vibration...",    "...resting claw...",    "*still as stone*"],
-    "idle":     ["Feeling surface~",   "*light touch*",         "Barely there..."],
-    "happy":    ["Tap tap~ nice!",     "Good rhythm~ :3",       "I feel that~"],
-    "excited":  ["STRONG TREMOR!!!",   "Intense contact!!!",    "WHOA SO INTENSE!!!"],
-    "hurt":     ["OW! Sharp impact!",  "That was a SLAP!",      ">.<  Too hard!"],
-    "scared":   ["Sudden jolt!!!",     "W-what hit me?!",       "Sharp transient >_<"],
-    "purring":  ["Purrrr~ steady~",    "Nice contact~",         "*smooth vibration*"],
-    "alert":    ["Vibration detected!","Something's moving~",   "I feel you~ :3"],
+    "sleeping": ["沒有振動...",        "...爪子休息中...",       "*靜止如石*"],
+    "idle":     ["感受到表面~",        "*輕觸*",                 "幾乎感覺不到..."],
+    "happy":    ["敲敲~ 真好！",       "好節奏~ :3",             "我感覺到了~"],
+    "excited":  ["強烈震動！！！",     "劇烈接觸！！！",         "哇！好激烈！！！"],
+    "hurt":     ["好痛！衝擊太大！",   "那一下是打過來的！",     ">.<  太重了！"],
+    "scared":   ["突然撞擊！！！",     "是什麼打到我？！",       "急促的震動 >_<"],
+    "purring":  ["呼嚕嚕~ 穩穩的~",   "好舒服的接觸~",          "*順滑的振動*"],
+    "alert":    ["偵測到振動！",       "有東西在動~",            "我感覺到你了~ :3"],
+}
+
+STATE_ZH = {
+    "sleeping": "沉睡中",
+    "idle":     "待機中",
+    "happy":    "開心",
+    "excited":  "興奮",
+    "hurt":     "受傷",
+    "scared":   "驚嚇",
+    "purring":  "滿足",
+    "alert":    "警覺",
 }
 
 
@@ -198,10 +209,11 @@ def render(state: str, reaction: str | None, rms: float, peak: float,
     global _DISPLAY_LINES
 
     face = FACES.get(state, FACES["idle"])
+    label = STATE_ZH.get(state, state)
     lines = [
         "",
         *face,
-        f"  [{state:^10}]",
+        f"  [{label}]",
         f"  Vol  {_bar(rms)}  {rms:5.0f}",
         f"  Peak {_bar(peak)}  {peak:5.0f}",
         f"  > {reaction or sticky_rx}",
@@ -313,7 +325,7 @@ def run_pet(ser: serial.Serial) -> None:
     print("Ctrl-C to stop.\n")
 
     emotion   = PetEmotion()
-    sticky_rx = "...waking up..."
+    sticky_rx = "...甦醒中..."
     render("sleeping", None, 0, 0, sticky_rx)
 
     try:

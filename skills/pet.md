@@ -41,7 +41,7 @@ Parse the JSON output and **MANDATORILY** render the claw's current emotion and 
 ASCII art + text. Example output to interpret:
 
 ```json
-{"emotion": "happy", "reaction": "Tap tap~ nice rhythm!", "rms": 2340, "peak": 8100, "duration_ms": 2000}
+{"emotion": "happy", "reaction": "好節奏~ :3", "rms": 2340, "peak": 8100, "duration_ms": 2000}
 ```
 
 Render using the matching face from the "Pet faces" table.
@@ -84,16 +84,31 @@ All faces share the same 19-line body; only the eyes (line 6) and expression
              \:_/\_:/
 ```
 
-| Emotion  | Eyes      | Expr  |
-|----------|-----------|-------|
-| sleeping | `_-""-_`  | `(zz)`|
-| idle     | `_0""0_`  | `(||)`|
-| happy    | `_^""^_`  | `(ww)`|
-| excited  | `_*""*_`  | `(!!)`|
-| hurt     | `_>""<_`  | `(xx)`|
-| scared   | `_O""O_`  | `(!!)`|
-| purring  | `_~""~_`  | `(~~)`|
-| alert    | `_o""O_`  | `(??)`|
+| Emotion  | Eyes      | Expr   | Label (STATE_ZH) |
+|----------|-----------|--------|------------------|
+| sleeping | `_-""-_`  | `(zz)` | 沉睡中           |
+| idle     | `_0""0_`  | `(||)` | 待機中           |
+| happy    | `_^""^_`  | `(ww)` | 開心             |
+| excited  | `_*""*_`  | `(!!)` | 興奮             |
+| hurt     | `_>""<_`  | `(xx)` | 受傷             |
+| scared   | `_O""O_`  | `(!!)` | 驚嚇             |
+| purring  | `_~""~_`  | `(~~)` | 滿足             |
+| alert    | `_o""O_`  | `(??)` | 警覺             |
+
+## Reactions (Traditional Chinese)
+
+Reaction messages are displayed in Traditional Chinese. One of the following is picked at random per emotion change:
+
+| Emotion  | Reactions                                                          |
+|----------|--------------------------------------------------------------------|
+| sleeping | 沒有振動... / ...爪子休息中... / *靜止如石*                        |
+| idle     | 感受到表面~ / *輕觸* / 幾乎感覺不到...                             |
+| happy    | 敲敲~ 真好！ / 好節奏~ :3 / 我感覺到了~                           |
+| excited  | 強烈震動！！！ / 劇烈接觸！！！ / 哇！好激烈！！！                |
+| hurt     | 好痛！衝擊太大！ / 那一下是打過來的！ / >.< 太重了！              |
+| scared   | 突然撞擊！！！ / 是什麼打到我？！ / 急促的震動 >_<                |
+| purring  | 呼嚕嚕~ 穩穩的~ / 好舒服的接觸~ / *順滑的振動*                   |
+| alert    | 偵測到振動！ / 有東西在動~ / 我感覺到你了~ :3                     |
 
 ## Emotion guide (vibration / claw sensing)
 
