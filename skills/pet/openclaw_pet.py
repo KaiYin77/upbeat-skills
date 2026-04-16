@@ -283,6 +283,50 @@ def auto_detect_port() -> str | None:
     return sorted(ports)[0].device if ports else None
 
 
+# ── startup noise-floor calibration ──────────────────────────────────────────
+
+def calibrate_noise_floor(ser: serial.Serial, blk: int) -> None:
+    """
+    Read ~1 s of idle audio to measure the device's ambient noise floor,
+    then scale all detection thresholds proportionally so the pet can reach
+    all emotions (sleeping, idle, purring, happy, alert, excited, hurt, scared).
+
+    Without calibration, devices with a high noise floor only ever show
+    "purring" (idle) or "excited" (touch) because THR_SILENCE / THR_GENTLE
+    are swamped by baseline vibration.
+    """
+    global THR_SILENCE, THR_GENTLE, THR_VOICE, THR_LOUD, THR_SLAP
+
+    print("Calibrating noise floor — keep device still for 1 s...", end=" ", flush=True)
+    rmss = []
+    for _ in range(100):          # 100 blocks × 10 ms = 1 s
+        buf = bytearray()
+        while len(buf) < blk:
+            chunk = ser.read(blk - len(buf))
+            if chunk:
+                buf += chunk
+        rmss.append(analyze(bytes(buf))["rms"])
+
+    floor = float(np.percentile(rmss, 90))   # 90th-pct = stable worst-case idle
+
+    if floor <= THR_SILENCE:
+        print(f"floor={floor:.0f}  (defaults OK)")
+        return
+
+    # Scale factor: shift THR_SILENCE to 1.5× above the measured floor
+    # so idle readings fall cleanly below it and the pet can sleep.
+    # All other thresholds shift by the same factor to preserve their spacing.
+    scale = (floor / THR_SILENCE) * 1.5
+    THR_SILENCE = int(THR_SILENCE * scale)
+    THR_GENTLE  = int(THR_GENTLE  * scale)
+    THR_VOICE   = int(THR_VOICE   * scale)
+    THR_LOUD    = int(THR_LOUD    * scale)
+    THR_SLAP    = int(THR_SLAP    * scale)
+    print(f"floor={floor:.0f}  scale={scale:.1f}×")
+    print(f"  silence:{THR_SILENCE}  gentle:{THR_GENTLE}  "
+          f"voice:{THR_VOICE}  loud:{THR_LOUD}  slap:{THR_SLAP}")
+
+
 # ── pet stream session ────────────────────────────────────────────────────────
 
 def run_pet(ser: serial.Serial) -> None:
@@ -323,6 +367,8 @@ def run_pet(ser: serial.Serial) -> None:
     print(f"Stream: {header['sr']} Hz / {header['ch']}ch / {header['bits']}-bit "
           f"/ {blk} B per block")
     print("Ctrl-C to stop.\n")
+
+    calibrate_noise_floor(ser, blk)
 
     emotion   = PetEmotion()
     sticky_rx = "...甦醒中..."
