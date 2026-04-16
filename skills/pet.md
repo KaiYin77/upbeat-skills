@@ -1,7 +1,12 @@
 # OpenClaw Pet
 
-Start the OpenClaw digital pet — creates a recurring 60-second status check and
-reports the pet's current emotion from the PDM microphone.
+Start the OpenClaw digital pet — the device acts as a real claw that senses
+vibrations through its surface. The PDM microphone picks up both airborne sound
+and structure-borne vibrations transmitted through the claw chassis, letting the
+claw feel what it's touching or resting on.
+
+Creates a recurring 60-second status check and reports the claw's current
+emotion based on the vibration/audio signal.
 
 ## Usage
 
@@ -18,17 +23,17 @@ $ARGUMENTS
 
 Parse `port` and `baud` from the arguments above (both optional).
 
-### Step 1 — take an immediate pet status reading
+### Step 1 — take an immediate claw status reading
 
 ```bash
-uv run ~/.claude/commands/mcu/openclaw_pet.py [PORT] [BAUD] --sample 2000
+uv run .claude/commands/mcu/openclaw_pet.py [PORT] [BAUD] --sample 2000
 ```
 
-Parse the JSON output and render the pet's current emotion and reaction as
+Parse the JSON output and render the claw's current emotion and reaction as
 ASCII art + text. Example output to interpret:
 
 ```json
-{"emotion": "happy", "reaction": "Hehe~ tickles!", "rms": 2340, "peak": 8100, "duration_ms": 2000}
+{"emotion": "happy", "reaction": "Tap tap~ nice rhythm!", "rms": 2340, "peak": 8100, "duration_ms": 2000}
 ```
 
 Render like this (use the matching face from the table below):
@@ -38,7 +43,7 @@ Render like this (use the matching face from the table below):
  ( ^.^ )
   (> <)
   [  happy   ]
-  > Hehe~ tickles!
+  > Tap tap~ nice rhythm!
 ```
 
 ### Step 2 — create a 60-second recurring cron job
@@ -52,31 +57,56 @@ Report the job ID and tell the user they can stop it with `CronDelete <id>`.
 
 ---
 
-## Pet faces
+## Pet faces (OpenClaw lobster)
 
-| Emotion   | Face lines                                  |
-|-----------|---------------------------------------------|
-| sleeping  | `( -.- )` / `> zzZ`                         |
-| idle      | `( o.o )` / `> ^ <`                         |
-| happy     | `( ^.^ )` / `(> <)`                         |
-| excited   | `( *.* )` / `/\| ^ \|\\`                   |
-| hurt      | `( >.< )` / `> x <`                         |
-| scared    | `( o_O )` / `> ! <`                         |
-| purring   | `( ~w~ )` / `>prrr<`                        |
-| alert     | `( o.O )` / `> ? <`                         |
+All faces share the same 19-line body; only the eyes (line 6) and expression
+(line 8) vary per emotion:
 
-## Emotion guide
+```
+      ____
+     /  __\
+    |: /---)  \    /   ___
+     \:( _/    \  /   /_  \
+      \  \      \/    \_\::)
+       \_ \   [EYES]   / _/    ← varies
+         \ \/=  \/  =\/ /
+          \ |  [EXPR]  | /     ← varies
+           \_\______/_/
+           __//    \\__
+          /__//====\\__\
+       _ //__//====\\__\\ _
+       _ //__//====\\__\\ _
+       _ //   /(  )\   \\ _
+       _ /    /(  )\    \ _
+              |(  )|
+              /    \
+             / /||\ \
+             \:_/\_:/
+```
 
-| Emotion  | What it means                        | Try this                        |
-|----------|--------------------------------------|---------------------------------|
-| sleeping | Silence for ~6 s                     | Make any sound to wake it       |
-| idle     | Very quiet environment               | Speak softly                    |
-| alert    | Heard a voice, waking up             | Keep talking                    |
-| happy    | Gentle voice or soft touch           | Speak gently or pat near mic    |
-| purring  | Soft sustained contact               | Gentle steady sound near mic    |
-| excited  | Loud environment                     | Try quieting down               |
-| hurt     | Sudden sharp impact / slap           | Be gentle!                      |
-| scared   | Sharp transient, moderate impact     | Speak softly to calm it down    |
+| Emotion  | Eyes      | Expr  |
+|----------|-----------|-------|
+| sleeping | `_-""-_`  | `(zz)`|
+| idle     | `_0""0_`  | `(||)`|
+| happy    | `_^""^_`  | `(ww)`|
+| excited  | `_*""*_`  | `(!!)`|
+| hurt     | `_>""<_`  | `(xx)`|
+| scared   | `_O""O_`  | `(!!)`|
+| purring  | `_~""~_`  | `(~~)`|
+| alert    | `_o""O_`  | `(??)`|
+
+## Emotion guide (vibration / claw sensing)
+
+| Emotion  | What it means                              | Try this                              |
+|----------|--------------------------------------------|---------------------------------------|
+| sleeping | No vibration for ~6 s                      | Tap the surface or touch the device   |
+| idle     | Very faint contact — barely touching       | Press gently against a surface        |
+| alert    | Vibration just detected, waking up         | Keep tapping or speaking near it      |
+| happy    | Gentle rhythmic tapping on the surface     | Tap steadily near the claw            |
+| purring  | Soft sustained contact / low hum           | Hold the device lightly and hum       |
+| excited  | Intense vibrations — heavy contact         | Knock hard on the surface             |
+| hurt     | Sudden sharp impact / slap                 | Be gentle — the claw felt that!       |
+| scared   | Sharp transient, moderate impact           | Speak softly or reduce vibrations     |
 
 ## Stopping the loop
 

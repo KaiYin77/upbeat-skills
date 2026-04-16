@@ -7,11 +7,15 @@
 # ]
 # ///
 """
-OpenClaw digital pet — real-time audio emotion engine.
+OpenClaw digital pet — real-time vibration / audio emotion engine.
 
-Connects to Trina-Pi-UP201 via UART, starts continuous PDM streaming
-via the 'pet' shell command, and translates audio signals into
-pet emotions displayed in the terminal.
+The device acts as a real claw: the on-board PDM microphone senses both
+airborne sound and structure-borne vibrations transmitted through the claw
+chassis (taps, impacts, steady contact, surface friction). These signals
+are streamed as raw PCM over UART and translated into claw emotions.
+
+Connects to OpenClaw E34 via UART, starts continuous PDM streaming
+via the 'pet' shell command, and renders claw emotions in the terminal.
 
 Usage:
     uv run openclaw_pet.py [PORT] [BAUD]
@@ -30,7 +34,13 @@ import serial
 import serial.tools.list_ports
 import numpy as np
 
-# ── audio config (must match firmware) ───────────────────────────────────────
+# Force UTF-8 output on Windows (cp950 / cp932 terminals can't render block chars)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+# ── vibration / audio config (must match firmware) ───────────────────────────
+# PDM_TOTAL_SIZE_PER_CHANNEL_WORD=160, PDM_CHANNEL_NUMBER=2, 16-bit repacked
+# Matches UPCmder: 160 samples × 10 ms blocks → 6.9 ms TX, 3 ms margin
 SAMPLE_RATE      = 16_000
 CHANNELS         = 2
 BYTES_PER_SAMPLE = 2
@@ -50,66 +60,64 @@ ZCR_VOICE    = 0.12     # zero-crossing rate above this = voiced sound
 HOLD_BLOCKS  = 18       # keep emotion displayed for N×10 ms (~1.8 s)
 IDLE_BLOCKS  = 60       # consecutive silence before sleeping (~6 s)
 
-# ── ASCII faces ───────────────────────────────────────────────────────────────
+# ── ASCII faces (OpenClaw lobster) ───────────────────────────────────────────
+def _make_face(eyes: str, expr: str) -> list[str]:
+    """19-line lobster body; only eyes (line 6) and expr (line 8) vary per emotion."""
+    return [
+        r"      ____",
+        "     /  __\\",
+        r"    |: /---)  \    /   ___",
+        "     \\:( _/    \\  /   /_  \\",
+        r"      \  \      \/    \_\::)",
+        f"       \\_ \\   {eyes}   / _/",
+        r"         \ \/=  \/  =\/ /",
+        f"          \\ |  {expr}  | /",
+        r"           \_\______/_/",
+        r"           __//    \\__",
+        "          /__//====\\\\__\\",
+        r"       _ //__//====\\__\\ _",
+        r"       _ //__//====\\__\\ _",
+        r"       _ //   /(  )\   \\ _",
+        r"       _ /    /(  )\    \ _",
+        r"              |(  )|",
+        "              /    \\",
+        "             / /||\\ \\",
+        r"             \:_/\_:/",
+    ]
+
 FACES = {
-    "sleeping": [
-        r"  /\_/\  ",
-        r" ( -.- ) ",
-        r"  > zzZ  ",
-    ],
-    "idle": [
-        r"  /\_/\  ",
-        r" ( o.o ) ",
-        r"  > ^ <  ",
-    ],
-    "happy": [
-        r"  /\_/\  ",
-        r" ( ^.^ ) ",
-        r"  (> <)  ",
-    ],
-    "excited": [
-        r"  /\_/\  ",
-        r" ( *.* ) ",
-        r" /| ^ |\ ",
-    ],
-    "hurt": [
-        r"  /\_/\  ",
-        r" ( >.< ) ",
-        r"  > x <  ",
-    ],
-    "scared": [
-        r"  /\_/\  ",
-        r" ( o_O ) ",
-        r"  > ! <  ",
-    ],
-    "purring": [
-        r"  /\_/\  ",
-        r" ( ~w~ ) ",
-        r"  >prrr< ",
-    ],
-    "alert": [
-        r"  /\_/\  ",
-        r" ( o.O ) ",
-        r"  > ? <  ",
-    ],
+    "sleeping": _make_face('_-""-_', "(zz)"),
+    "idle":     _make_face('_0""0_', "(||)"),
+    "happy":    _make_face('_^""^_', "(ww)"),
+    "excited":  _make_face('_*""*_', "(!!)"),
+    "hurt":     _make_face('_>""<_', "(xx)"),
+    "scared":   _make_face('_O""O_', "(!!)"),
+    "purring":  _make_face('_~""~_', "(~~)"),
+    "alert":    _make_face('_o""O_', "(??)"),
 }
 
 REACTIONS = {
-    "sleeping": ["Zzz...",          "...zzzz...",         "*snoring softly*"],
-    "idle":     ["...",             "*yawns*",            "*stretches*"],
-    "happy":    ["Hehe~ tickles!",  "Yay! :3",            "So happy~"],
-    "excited":  ["WOOOO!!!",        "Ahhhh!!!",           "SO EXCITING!!!"],
-    "hurt":     ["OW! That hurt!",  "Ouch!!!",            ">.<  Stooop!"],
-    "scared":   ["AHHH!!!",         "W-what was that?!",  "Scared >_<"],
-    "purring":  ["Purrrrrr~",       "Mmm~ so nice~",      "*happy noises*"],
-    "alert":    ["Hmm? Who's there?","I hear you~",       "Hello? :3"],
+    "sleeping": ["No vibration...",    "...resting claw...",    "*still as stone*"],
+    "idle":     ["Feeling surface~",   "*light touch*",         "Barely there..."],
+    "happy":    ["Tap tap~ nice!",     "Good rhythm~ :3",       "I feel that~"],
+    "excited":  ["STRONG TREMOR!!!",   "Intense contact!!!",    "WHOA SO INTENSE!!!"],
+    "hurt":     ["OW! Sharp impact!",  "That was a SLAP!",      ">.<  Too hard!"],
+    "scared":   ["Sudden jolt!!!",     "W-what hit me?!",       "Sharp transient >_<"],
+    "purring":  ["Purrrr~ steady~",    "Nice contact~",         "*smooth vibration*"],
+    "alert":    ["Vibration detected!","Something's moving~",   "I feel you~ :3"],
 }
 
 
 # ── signal analysis ───────────────────────────────────────────────────────────
 
 def analyze(pcm_bytes: bytes) -> dict:
-    """Analyze one 10 ms stereo int16 PCM block."""
+    """
+    Analyze one 10 ms stereo int16 vibration/PCM block.
+
+    Firmware sends interleaved L/R int16-LE where each sample =
+    (24-bit DMA word >> 8) & 0xFFFF (bytes 1+2, matching audio.py).
+    Single PDM mic → L == R; average to mono for analysis.
+    """
     raw  = np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32)
     mono = (raw[0::2] + raw[1::2]) * 0.5
 
@@ -234,6 +242,9 @@ def recv_prompt(ser: serial.Serial, timeout: float = 5.0) -> bytes:
     return buf
 
 def wait_alive(ser: serial.Serial, retries: int = 4) -> bool:
+    # Step 0: stop any in-progress pet/stream session (send 'q' + Ctrl-C)
+    ser.write(b"q\x03"); time.sleep(0.5)
+    ser.reset_input_buffer()
     # Step 1: poke for a live prompt
     for _ in range(retries):
         ser.write(b"\r\n"); time.sleep(0.3)

@@ -20,7 +20,7 @@ Parse `port` and `baud` from the arguments above (both optional).
 ### Step 1 — discover the port (if not given)
 
 ```bash
-uv run ~/.claude/commands/mcu/mcu_shell.py --list
+uv run .claude/commands/mcu/mcu_shell.py --list
 ```
 
 Ask the user which port to use if there is more than one candidate.
@@ -29,18 +29,18 @@ Ask the user which port to use if there is more than one candidate.
 
 ```bash
 # Interactive session
-uv run ~/.claude/commands/mcu/mcu_shell.py [PORT] [BAUD]
+uv run .claude/commands/mcu/mcu_shell.py [PORT] [BAUD]
 
 # One-shot queries
-uv run ~/.claude/commands/mcu/mcu_shell.py --run ver --run info
+uv run .claude/commands/mcu/mcu_shell.py --run ver --run info
 
 # Batch record (max 1960 ms, stores to SRAM then transmits)
-uv run ~/.claude/commands/mcu/mcu_shell.py --record 1960
-uv run ~/.claude/commands/mcu/mcu_shell.py --record 1000 --out clip.wav
+uv run .claude/commands/mcu/mcu_shell.py --record 1960
+uv run .claude/commands/mcu/mcu_shell.py --record 1000 --out clip.wav
 
 # Real-time stream (no size limit)
-uv run ~/.claude/commands/mcu/mcu_shell.py --stream 5000
-uv run ~/.claude/commands/mcu/mcu_shell.py --stream 10000 --out long.wav
+uv run .claude/commands/mcu/mcu_shell.py --stream 5000
+uv run .claude/commands/mcu/mcu_shell.py --stream 10000 --out long.wav
 ```
 
 `uv` installs `pyserial` automatically — no manual pip or venv needed.
@@ -134,10 +134,18 @@ Unlike `stream`, no block count is sent upfront — data flows until the host st
 ## OpenClaw digital pet
 
 The pet mode turns the PDM microphone into a live emotion sensor.
-Physical interactions near the board are captured and translated into pet feelings.
+Physical interactions near the board are captured and translated into claw emotions.
+
+> **Token note:** the pet streams continuous audio — running it via Bash floods Claude's
+> context. Use `/pet` for a 2-second snapshot with zero streaming, or open a **separate
+> terminal** for the live interactive session.
 
 ```bash
-uv run ~/.claude/commands/mcu/openclaw_pet.py [PORT] [BAUD]
+# One-shot snapshot (safe from Claude Code)
+uv run .claude/commands/mcu/openclaw_pet.py [PORT] [BAUD] --sample 2000
+
+# Live interactive (run in a separate terminal, not via Claude)
+uv run .claude/commands/mcu/openclaw_pet.py COM15
 ```
 
 ### Signal → emotion mapping
@@ -150,18 +158,6 @@ uv run ~/.claude/commands/mcu/openclaw_pet.py [PORT] [BAUD]
 | **Shout / loud** | RMS > 9000 | `excited` |
 | **Silence ~6 s** | RMS < 300 | `sleeping` |
 
-### Running the pet
-
-```bash
-# Auto-detect port
-uv run ~/.claude/commands/mcu/openclaw_pet.py
-
-# Explicit port
-uv run ~/.claude/commands/mcu/openclaw_pet.py COM15
-
-# Press Ctrl-C to stop — cleanly sends 'q' to device and waits for PET_STOP
-```
-
 `uv` installs `pyserial` and `numpy` automatically.
 
 ---
@@ -170,13 +166,13 @@ uv run ~/.claude/commands/mcu/openclaw_pet.py COM15
 
 When asked to check for noise, record a voice sample, or run audio analysis:
 
-1. Call `do_record(ser, ms)` or `do_stream(ser, ms)` from `~/.claude/commands/mcu/mcu_shell.py`
+1. Call `do_record(ser, ms)` or `do_stream(ser, ms)` from `.claude/commands/mcu/mcu_shell.py`
 2. The returned WAV is 16 kHz stereo 16-bit — compatible with any audio ML library
 3. Pass to `librosa`, `soundfile`, `silero-VAD`, `webrtcvad`, `whisper`, etc.
 
 ```bash
 # Capture then analyse
-uv run ~/.claude/commands/mcu/mcu_shell.py --stream 3000 --out /tmp/sample.wav
+uv run .claude/commands/mcu/mcu_shell.py --stream 3000 --out /tmp/sample.wav
 # → analyse /tmp/sample.wav with AI model
 ```
 

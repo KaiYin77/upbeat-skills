@@ -40,6 +40,7 @@ import sys
 import os
 import time
 import wave
+import struct
 import argparse
 import textwrap
 import datetime
@@ -349,15 +350,43 @@ def do_stream(ser: serial.Serial, duration_ms: int,
 
 def save_wav(pcm: bytes, sample_rate: int, channels: int,
              bit_depth: int, filename: str) -> str:
-    """Write raw PCM bytes to a WAV file. Returns the saved path."""
+    """
+    Write raw PCM bytes to a mono WAV file (matching reference audio.py).
+
+    Firmware sends interleaved stereo int16-LE (L,R,L,R,...) where each
+    16-bit sample = (24-bit DMA word >> 8) & 0xFFFF — bytes 1 and 2 of the
+    32-bit DMA word, preserving sign from the MSByte.
+
+    Since the board has a single PDM mic (L == R), we downmix to mono by
+    averaging the two channels, matching audio.py's nchannels=1 output.
+    """
     os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
+
+    bytes_per_sample = bit_depth // 8
+    fmt = "<" + "h" * (len(pcm) // bytes_per_sample)
+    samples = struct.unpack(fmt, pcm)
+
+    if channels == 2:
+        # Average L and R (both from same PDM mic) → mono
+        mono = [
+            (samples[i] + samples[i + 1]) // 2
+            for i in range(0, len(samples), 2)
+        ]
+        out_channels = 1
+    else:
+        mono = list(samples)
+        out_channels = channels
+
+    packed = struct.pack("<" + "h" * len(mono), *mono)
+
     with wave.open(filename, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(bit_depth // 8)
+        wf.setnchannels(out_channels)
+        wf.setsampwidth(bytes_per_sample)
         wf.setframerate(sample_rate)
-        wf.writeframes(pcm)
-    duration_s = len(pcm) / (sample_rate * channels * (bit_depth // 8))
-    print(f"  Saved {filename}  ({duration_s:.2f} s, {len(pcm)} bytes)")
+        wf.writeframes(packed)
+
+    duration_s = len(mono) / sample_rate
+    print(f"  Saved {filename}  ({duration_s:.2f} s, {len(packed)} bytes)")
     return filename
 
 
