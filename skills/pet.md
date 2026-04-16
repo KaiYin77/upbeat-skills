@@ -34,7 +34,7 @@ Parse `port` and `baud` from the arguments above (both optional).
 ### Step 1 — take an immediate claw status reading
 
 ```bash
-uv run .agents/skills/pet/openclaw_pet.py [PORT] [BAUD] --sample 2000
+uv run "$(find .claude/commands/pet .agents/skills/pet -name 'openclaw_pet.py' 2>/dev/null | head -1)" [PORT] [BAUD] --sample 2000
 ```
 
 Parse the JSON output and **MANDATORILY** render the claw's current emotion and reaction as
