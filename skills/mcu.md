@@ -147,10 +147,10 @@ Physical interactions near the board are captured and translated into claw emoti
 
 ```bash
 # One-shot snapshot (safe from Claude Code)
-uv run .agents/skills/mcu/openclaw_pet.py [PORT] [BAUD] --sample 2000
+uv run .agents/skills/pet/openclaw_pet.py [PORT] [BAUD] --sample 2000
 
 # Live interactive (run in a separate terminal, not via Claude)
-uv run .agents/skills/mcu/openclaw_pet.py COM15
+uv run .agents/skills/pet/openclaw_pet.py COM15
 ```
 
 ### Signal → emotion mapping
