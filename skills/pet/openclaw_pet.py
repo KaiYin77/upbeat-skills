@@ -54,8 +54,11 @@ THR_VOICE    =  3000    # speaking / calling (also needs high ZCR)
 THR_LOUD     =  9000    # excited / shouting
 THR_SLAP     = 18000    # sudden impact peak → hurt/scared
 
-CREST_IMPACT = 7.0      # peak/RMS ratio above this = sharp transient (slap)
+# Note: CREST_IMPACT (was 7.0) is unreachable on the UP201 — the board rings after
+# any impact, keeping RMS high and crest ≤ 3.0. Hurt/scared use peak+RMS instead.
+CREST_TAP    = 1.5      # peak/RMS ratio: rhythmic tapping transient
 ZCR_VOICE    = 0.12     # zero-crossing rate above this = voiced sound
+ZCR_FRICTION = 0.15     # zero-crossing rate above this = surface friction (rubbing)
 
 HOLD_BLOCKS  = 18       # keep emotion displayed for N×10 ms (~1.8 s)
 IDLE_BLOCKS  = 60       # consecutive silence before sleeping (~6 s)
@@ -87,35 +90,26 @@ def _make_face(eyes: str, expr: str) -> list[str]:
 
 FACES = {
     "sleeping": _make_face('_-""-_', "(zz)"),
-    "idle":     _make_face('_0""0_', "(||)"),
     "happy":    _make_face('_^""^_', "(ww)"),
     "excited":  _make_face('_*""*_', "(!!)"),
     "hurt":     _make_face('_>""<_', "(xx)"),
-    "scared":   _make_face('_O""O_', "(!!)"),
     "purring":  _make_face('_~""~_', "(~~)"),
-    "alert":    _make_face('_o""O_', "(??)"),
 }
 
 REACTIONS = {
     "sleeping": ["沒有振動...",        "...爪子休息中...",       "*靜止如石*"],
-    "idle":     ["感受到表面~",        "*輕觸*",                 "幾乎感覺不到..."],
     "happy":    ["敲敲~ 真好！",       "好節奏~ :3",             "我感覺到了~"],
     "excited":  ["強烈震動！！！",     "劇烈接觸！！！",         "哇！好激烈！！！"],
     "hurt":     ["好痛！衝擊太大！",   "那一下是打過來的！",     ">.<  太重了！"],
-    "scared":   ["突然撞擊！！！",     "是什麼打到我？！",       "急促的震動 >_<"],
     "purring":  ["呼嚕嚕~ 穩穩的~",   "好舒服的接觸~",          "*順滑的振動*"],
-    "alert":    ["偵測到振動！",       "有東西在動~",            "我感覺到你了~ :3"],
 }
 
 STATE_ZH = {
     "sleeping": "沉睡中",
-    "idle":     "待機中",
     "happy":    "開心",
     "excited":  "興奮",
     "hurt":     "受傷",
-    "scared":   "驚嚇",
     "purring":  "滿足",
-    "alert":    "警覺",
 }
 
 
@@ -159,19 +153,35 @@ class PetEmotion:
 
         new = None
 
-        if peak >= THR_SLAP and crest >= CREST_IMPACT:
-            new = "hurt" if peak >= THR_SLAP * 1.5 else "scared"
+        # Impact: very high single-block peak+RMS from near-quiet
+        # (crest-based detection is unreachable on UP201 — see CREST_IMPACT note)
+        # srms < THR_LOUD excludes sustained shaking which also saturates the ADC.
+        if (peak >= THR_SLAP and a["rms"] >= THR_SLAP * 0.5
+                and srms < THR_LOUD):
+            new = "hurt"
 
         elif srms >= THR_LOUD:
-            new = "excited"
+            # High sustained energy: rub (high ZCR) vs shake (low ZCR)
+            if zcr >= ZCR_FRICTION:
+                new = "purring"   # vigorous friction / rubbing
+            else:
+                new = "excited"   # heavy sustained vibration / shaking
 
-        elif srms >= THR_VOICE and zcr >= ZCR_VOICE:
-            # voiced sound: call or talking
-            new = "alert" if self.state == "sleeping" else "happy"
+        elif srms >= THR_VOICE:
+            # Medium-high energy: friction > general vibration
+            if zcr >= ZCR_FRICTION:
+                new = "purring"   # surface friction (rubbing)
+            else:
+                new = "happy"     # strong vibration or voice, low ZCR
 
         elif srms >= THR_GENTLE:
-            # soft contact: gentle pat
-            new = "purring" if crest < 4.0 else "happy"
+            # Gentle range: friction > tapping transient > soft contact
+            if zcr >= ZCR_FRICTION:
+                new = "purring"   # gentle friction
+            elif crest >= CREST_TAP:
+                new = "happy"     # rhythmic tapping (transient spike)
+            else:
+                new = "purring"   # soft sustained contact
 
         elif srms < THR_SILENCE:
             if self.hold > 0:
@@ -180,8 +190,6 @@ class PetEmotion:
                 self.idle_cnt += 1
                 if self.idle_cnt >= IDLE_BLOCKS:
                     new = "sleeping"
-                elif self.state not in ("sleeping", "idle"):
-                    new = "idle"
         else:
             # between silence and gentle: reset idle counter
             self.idle_cnt = 0
@@ -208,7 +216,7 @@ def render(state: str, reaction: str | None, rms: float, peak: float,
            sticky_rx: str) -> None:
     global _DISPLAY_LINES
 
-    face = FACES.get(state, FACES["idle"])
+    face = FACES.get(state, FACES["sleeping"])
     label = STATE_ZH.get(state, state)
     lines = [
         "",
@@ -289,10 +297,10 @@ def calibrate_noise_floor(ser: serial.Serial, blk: int) -> None:
     """
     Read ~1 s of idle audio to measure the device's ambient noise floor,
     then scale all detection thresholds proportionally so the pet can reach
-    all emotions (sleeping, idle, purring, happy, alert, excited, hurt, scared).
+    all emotions (sleeping, purring, happy, excited, hurt).
 
     Without calibration, devices with a high noise floor only ever show
-    "purring" (idle) or "excited" (touch) because THR_SILENCE / THR_GENTLE
+    "purring" or "excited" because THR_SILENCE / THR_GENTLE
     are swamped by baseline vibration.
     """
     global THR_SILENCE, THR_GENTLE, THR_VOICE, THR_LOUD, THR_SLAP
@@ -318,10 +326,12 @@ def calibrate_noise_floor(ser: serial.Serial, blk: int) -> None:
     # All other thresholds shift by the same factor to preserve their spacing.
     scale = (floor / THR_SILENCE) * 1.5
     THR_SILENCE = int(THR_SILENCE * scale)
-    THR_GENTLE  = int(THR_GENTLE  * scale)
-    THR_VOICE   = int(THR_VOICE   * scale)
-    THR_LOUD    = int(THR_LOUD    * scale)
-    THR_SLAP    = int(THR_SLAP    * scale)
+    # Cap each threshold so it stays in the int16 range and reachable by real
+    # interactions on this device (measured: tap ~9.8k, rub ~24k, shake ~31k).
+    THR_GENTLE  = min(int(THR_GENTLE  * scale),  9_000)
+    THR_VOICE   = min(int(THR_VOICE   * scale), 18_000)
+    THR_LOUD    = min(int(THR_LOUD    * scale), 27_000)
+    THR_SLAP    = min(int(THR_SLAP    * scale), 32_000)
     print(f"floor={floor:.0f}  scale={scale:.1f}×")
     print(f"  silence:{THR_SILENCE}  gentle:{THR_GENTLE}  "
           f"voice:{THR_VOICE}  loud:{THR_LOUD}  slap:{THR_SLAP}")
@@ -477,8 +487,8 @@ def run_sample(ser: serial.Serial, duration_ms: int) -> None:
 
     # Analyze the full window
     emotion   = PetEmotion()
-    final_rx  = REACTIONS["idle"][0]
-    final_st  = "idle"
+    final_rx  = REACTIONS["sleeping"][0]
+    final_st  = "sleeping"
     block_size = blk_bytes
 
     for off in range(0, len(data) - block_size + 1, block_size):

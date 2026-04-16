@@ -87,13 +87,10 @@ All faces share the same 19-line body; only the eyes (line 6) and expression
 | Emotion  | Eyes      | Expr   | Label (STATE_ZH) |
 |----------|-----------|--------|------------------|
 | sleeping | `_-""-_`  | `(zz)` | 沉睡中           |
-| idle     | `_0""0_`  | `(||)` | 待機中           |
 | happy    | `_^""^_`  | `(ww)` | 開心             |
 | excited  | `_*""*_`  | `(!!)` | 興奮             |
 | hurt     | `_>""<_`  | `(xx)` | 受傷             |
-| scared   | `_O""O_`  | `(!!)` | 驚嚇             |
 | purring  | `_~""~_`  | `(~~)` | 滿足             |
-| alert    | `_o""O_`  | `(??)` | 警覺             |
 
 ## Reactions (Traditional Chinese)
 
@@ -102,26 +99,35 @@ Reaction messages are displayed in Traditional Chinese. One of the following is 
 | Emotion  | Reactions                                                          |
 |----------|--------------------------------------------------------------------|
 | sleeping | 沒有振動... / ...爪子休息中... / *靜止如石*                        |
-| idle     | 感受到表面~ / *輕觸* / 幾乎感覺不到...                             |
 | happy    | 敲敲~ 真好！ / 好節奏~ :3 / 我感覺到了~                           |
 | excited  | 強烈震動！！！ / 劇烈接觸！！！ / 哇！好激烈！！！                |
 | hurt     | 好痛！衝擊太大！ / 那一下是打過來的！ / >.< 太重了！              |
-| scared   | 突然撞擊！！！ / 是什麼打到我？！ / 急促的震動 >_<                |
 | purring  | 呼嚕嚕~ 穩穩的~ / 好舒服的接觸~ / *順滑的振動*                   |
-| alert    | 偵測到振動！ / 有東西在動~ / 我感覺到你了~ :3                     |
 
 ## Emotion guide (vibration / claw sensing)
 
-| Emotion  | What it means                              | Try this                              |
-|----------|--------------------------------------------|---------------------------------------|
-| sleeping | No vibration for ~6 s                      | Tap the surface or touch the device   |
-| idle     | Very faint contact — barely touching       | Press gently against a surface        |
-| alert    | Vibration just detected, waking up         | Keep tapping or speaking near it      |
-| happy    | Gentle rhythmic tapping on the surface     | Tap steadily near the claw            |
-| purring  | Soft sustained contact / low hum           | Hold the device lightly and hum       |
-| excited  | Intense vibrations — heavy contact         | Knock hard on the surface             |
-| hurt     | Sudden sharp impact / slap                 | Be gentle — the claw felt that!       |
-| scared   | Sharp transient, moderate impact           | Speak softly or reduce vibrations     |
+| Emotion  | What it means                                    | How to trigger                               | Baseline recording      |
+|----------|--------------------------------------------------|----------------------------------------------|-------------------------|
+| sleeping | No vibration for ~6 s                            | Leave the device still                       | `quiet_baseline.wav`    |
+| happy    | Rhythmic tapping — intermittent transient spikes | Tap the surface repeatedly (敲擊)            | `tapping_baseline.wav`  |
+| purring  | Sustained friction — high zero-crossing rate     | Rub the surface vigorously (摩擦 / 搖晃)     | `rubbing_baseline.wav`  |
+| excited  | Heavy sustained vibration — saturating RMS       | Shake the device hard (搖晃)                 | `shaking_baseline.wav`  |
+| hurt     | Sudden hard impact from near-silence             | Slap the surface hard                        | `hurt_baseline.wav`     |
+
+### Signal → emotion mapping (measured on Trina-Pi-UP201)
+
+| Interaction | Audio signature | Threshold | Emotion |
+|---|---|---|---|
+| **Silence** | RMS < noise floor | RMS < THR_SILENCE | `sleeping` |
+| **Tap / knock** | Intermittent spike, crest ≥ 1.5, ZCR ≈ 0 | RMS ≥ THR_GENTLE | `happy` |
+| **Gentle contact** | Low RMS, crest < 1.5, ZCR ≈ 0 | RMS ≥ THR_GENTLE | `purring` |
+| **Rub / friction** | Sustained high ZCR ≥ 0.15 | RMS ≥ THR_GENTLE | `purring` |
+| **Shake** | Very high RMS, ZCR < 0.15 | RMS ≥ THR_LOUD | `excited` |
+| **Slap / impact** | Peak ≥ THR_SLAP, inst. RMS ≥ THR_SLAP×0.5, smoothed RMS < THR_LOUD | `hurt` |
+
+> **Calibration note:** At startup the pet measures 1 s of ambient noise.
+> If the device noise floor is high (measured ~5000 RMS on UP201), thresholds are
+> scaled up proportionally and capped at safe values so all emotions remain reachable.
 
 ## Stopping the loop
 
