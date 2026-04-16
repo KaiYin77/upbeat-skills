@@ -11,15 +11,32 @@ Skills for Upbeat / Trina-Pi hardware. Supports **Claude Code** and **Gemini CLI
 
 ## Install
 
+**One-liner (interactive picker):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/master/install.sh | bash
+```
+
+You'll be prompted to choose which skills to install and for which agent.
+
+**One-liner options:**
+
+```bash
+# Install all skills for Gemini CLI without prompting
+curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/master/install.sh | bash -s -- --all --agent gemini
+
+# Install all skills for Claude Code without prompting
+curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/master/install.sh | bash -s -- --all
+```
+
+**From a local clone:**
+
 ```bash
 git clone https://github.com/KaiYin77/upbeat-skills
 cd upbeat-skills
-
-# Install all skills to current project for Claude Code (default)
-bash install.sh
-
-# Install all skills to current project for Gemini CLI
-bash install.sh --agent gemini
+bash install.sh              # interactive, Claude Code
+bash install.sh --all        # all skills, Claude Code
+bash install.sh --agent gemini --all  # all skills, Gemini CLI
 ```
 
 Restart your agent (Claude Code or Gemini CLI) after installing.
