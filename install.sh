@@ -1,40 +1,41 @@
 #!/usr/bin/env bash
 # Install upbeat agent skills (Claude Code or Gemini CLI)
 #
-# One-liner (interactive):
-#   curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/master/install.sh | bash
+# One-liner (interactive — picks agent):
+#   curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/main/install.sh | bash
 #
-# One-liner (all skills, specific agent):
-#   curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/master/install.sh | bash -s -- --all --agent gemini
+# One-liner (specific agent, non-interactive):
+#   curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/main/install.sh | bash -s -- --agent gemini
+#   curl -fsSL https://raw.githubusercontent.com/KaiYin77/upbeat-skills/main/install.sh | bash -s -- --agent claude
 #
 # Local usage:
-#   ./install.sh                  interactive for Claude
-#   ./install.sh --all            install all for Claude
-#   ./install.sh --agent gemini   interactive for Gemini
+#   ./install.sh                  interactive agent picker, installs all skills
+#   ./install.sh --agent gemini   install all skills for Gemini (non-interactive)
+#   ./install.sh --agent claude   install all skills for Claude Code (non-interactive)
 
 set -euo pipefail
 
-REPO_TARBALL="https://github.com/KaiYin77/upbeat-skills/archive/refs/heads/master.tar.gz"
-AGENT="claude"
-INSTALL_ALL=false
+REPO_TARBALL="https://github.com/KaiYin77/upbeat-skills/archive/refs/heads/main.tar.gz"
+AGENT=""
 _TMP=""
 
 # ── parse args ───────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --agent|-a) AGENT="$2"; shift 2 ;;
-        --all)      INSTALL_ALL=true; shift ;;
         --help|-h)
-            echo "Usage: $0 [--agent claude|gemini] [--all]"
+            echo "Usage: $0 [--agent claude|gemini]"
             echo ""
-            echo "  --agent, -a  Target agent: 'claude' (default) or 'gemini'"
-            echo "  --all        Install all skills without prompting"
+            echo "  --agent, -a  Target agent: 'claude' or 'gemini'"
+            echo "               Omit to use the interactive agent picker."
+            echo ""
+            echo "All skills are always installed."
             exit 0 ;;
         *) echo "Error: unknown argument '$1'" >&2; exit 1 ;;
     esac
 done
 
-if [ "$AGENT" != "claude" ] && [ "$AGENT" != "gemini" ]; then
+if [ -n "$AGENT" ] && [ "$AGENT" != "claude" ] && [ "$AGENT" != "gemini" ]; then
     echo "Error: unsupported agent '$AGENT'. Use 'claude' or 'gemini'." >&2
     exit 1
 fi
@@ -55,22 +56,11 @@ if [ ! -d "$SKILLS_DIR" ]; then
     SKILLS_DIR="$_TMP/skills"
 fi
 
-# ── destination ───────────────────────────────────────────────────────────────
-if [ "$AGENT" = "claude" ]; then
-    DEST="$(pwd)/.claude/commands"
-else
-    DEST="$(pwd)/.agents/skills"
-fi
-
-# ── collect available skills with descriptions ────────────────────────────────
+# ── collect available skills ──────────────────────────────────────────────────
 SKILL_NAMES=()
-SKILL_DESCS=()
 for md in "$SKILLS_DIR"/*.md; do
     [ -f "$md" ] || continue
-    name="$(basename "$md" .md)"
-    desc="$(grep -m1 '^description:' "$md" 2>/dev/null | sed 's/^description:[[:space:]]*//' || echo "")"
-    SKILL_NAMES+=("$name")
-    SKILL_DESCS+=("$desc")
+    SKILL_NAMES+=("$(basename "$md" .md)")
 done
 
 if [ "${#SKILL_NAMES[@]}" -eq 0 ]; then
@@ -78,55 +68,42 @@ if [ "${#SKILL_NAMES[@]}" -eq 0 ]; then
     exit 1
 fi
 
-# ── interactive selection ─────────────────────────────────────────────────────
-SELECTED=()
-
-_pick_skills() {
+# ── interactive agent picker (only when --agent not supplied) ─────────────────
+_pick_agent() {
     local tty_fd="$1"
     echo ""
-    echo "  Available skills:"
+    echo "  Which agent are you using?"
     echo ""
-    for i in "${!SKILL_NAMES[@]}"; do
-        printf "    [%d] %-12s  %s\n" "$((i+1))" "${SKILL_NAMES[$i]}" "${SKILL_DESCS[$i]}"
-    done
+    echo "    [1] Claude Code  (.claude/commands/)"
+    echo "    [2] Gemini CLI   (.agents/skills/)"
     echo ""
-    echo "    [a] All skills"
-    echo ""
-    printf "  Which skills to install? (e.g. 1 2  or  a): "
+    printf "  Choice [1/2]: "
     local choice
     read -r choice <&"$tty_fd"
-
-    if [[ "$choice" == "a" || "$choice" == "A" || -z "$choice" ]]; then
-        SELECTED=("${SKILL_NAMES[@]}")
-    else
-        for tok in $choice; do
-            if [[ "$tok" =~ ^[0-9]+$ ]] && [ "$tok" -ge 1 ] && [ "$tok" -le "${#SKILL_NAMES[@]}" ]; then
-                SELECTED+=("${SKILL_NAMES[$((tok-1))]}")
-            else
-                echo "  Warning: invalid selection '$tok', skipping." >&2
-            fi
-        done
-    fi
+    case "$choice" in
+        2) AGENT="gemini" ;;
+        *)  AGENT="claude" ;;   # default to claude on Enter or '1'
+    esac
 }
 
-if [ "$INSTALL_ALL" = true ]; then
-    SELECTED=("${SKILL_NAMES[@]}")
-elif [ -t 0 ]; then
-    # stdin is a terminal — read directly
-    _pick_skills 0
-elif [ -e /dev/tty ]; then
-    # stdin is a pipe (curl) — open controlling terminal explicitly
-    exec 3</dev/tty
-    _pick_skills 3
-    exec 3<&-
-else
-    echo "Non-interactive shell detected — installing all skills."
-    SELECTED=("${SKILL_NAMES[@]}")
+if [ -z "$AGENT" ]; then
+    if [ -t 0 ]; then
+        _pick_agent 0
+    elif [ -e /dev/tty ]; then
+        exec 3</dev/tty
+        _pick_agent 3
+        exec 3<&-
+    else
+        echo "Non-interactive shell — defaulting to Claude Code." >&2
+        AGENT="claude"
+    fi
 fi
 
-if [ "${#SELECTED[@]}" -eq 0 ]; then
-    echo "No skills selected. Nothing to install."
-    exit 0
+# ── destination ───────────────────────────────────────────────────────────────
+if [ "$AGENT" = "claude" ]; then
+    DEST="$(pwd)/.claude/commands"
+else
+    DEST="$(pwd)/.agents/skills"
 fi
 
 # ── install ───────────────────────────────────────────────────────────────────
@@ -156,7 +133,7 @@ _install_skill() {
     fi
 }
 
-for skill in "${SELECTED[@]}"; do
+for skill in "${SKILL_NAMES[@]}"; do
     _install_skill "$skill"
 done
 
