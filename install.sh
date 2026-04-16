@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Install upbeat Claude Code skills
+# Install upbeat agent skills (Claude Code or Gemini CLI)
 #
 # Usage:
-#   ./install.sh                  install all skills globally (~/.claude/commands/)
-#   ./install.sh mcu              install only the mcu skill globally
-#   ./install.sh --project        install all skills into current project (.claude/commands/)
-#   ./install.sh mcu --project    install mcu skill into current project
+#   ./install.sh                  install all skills for Claude to current project (.claude/commands/)
+#   ./install.sh --agent gemini   install all skills for Gemini to current project (.agents/skills/)
 
 set -euo pipefail
 
@@ -13,66 +11,62 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_DIR="$SCRIPT_DIR/skills"
 
 # ── parse args ──────────────────────────────────────────────────────────────
-SKILL_FILTER=""
-PROJECT_MODE=false
+AGENT="claude"
 
-for arg in "$@"; do
-    case "$arg" in
-        --project) PROJECT_MODE=true ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --agent|-a) AGENT="$2"; shift 2 ;;
         --help|-h)
-            echo "Usage: $0 [skill_name] [--project]"
+            echo "Usage: $0 [--agent claude|gemini]"
             echo ""
-            echo "  skill_name   Install only this skill (default: all)"
-            echo "  --project    Install to current project's .claude/commands/"
-            echo "               (default: ~/.claude/commands/)"
+            echo "  --agent, -a  Target agent: 'claude' (default) or 'gemini'"
             exit 0
             ;;
-        *) SKILL_FILTER="$arg" ;;
+        *) echo "Unknown argument: $1"; exit 1 ;;
     esac
 done
 
-if $PROJECT_MODE; then
+# ── set destination (always local project) ──────────────────────────────────
+if [ "$AGENT" == "claude" ]; then
     DEST="$(pwd)/.claude/commands"
-    echo "Installing to project: $DEST"
+elif [ "$AGENT" == "gemini" ]; then
+    DEST="$(pwd)/.agents/skills"
 else
-    DEST="$HOME/.claude/commands"
-    echo "Installing globally: $DEST"
+    echo "Error: unsupported agent '$AGENT'. Use 'claude' or 'gemini'." >&2
+    exit 1
 fi
 
+echo "Installing for $AGENT to local project: $DEST"
 mkdir -p "$DEST"
 
-# ── install one skill ───────────────────────────────────────────────────────
-# skills/ mirrors .claude/commands/ exactly:
-#   skills/mcu.md        → commands/mcu.md
-#   skills/mcu/          → commands/mcu/
+# ── install logic ───────────────────────────────────────────────────────────
 install_skill() {
     local name="$1"
-
-    if [ ! -f "$SKILLS_DIR/$name.md" ]; then
-        echo "Error: skill '$name' not found (missing $SKILLS_DIR/$name.md)" >&2
-        exit 1
-    fi
+    local md_source="$SKILLS_DIR/$name.md"
+    local dir_source="$SKILLS_DIR/$name"
 
     echo "  Installing: $name"
-    cp "$SKILLS_DIR/$name.md" "$DEST/$name.md"
 
-    if [ -d "$SKILLS_DIR/$name" ]; then
+    if [ "$AGENT" == "claude" ]; then
+        cp "$md_source" "$DEST/$name.md"
+        if [ -d "$dir_source" ]; then
+            mkdir -p "$DEST/$name"
+            cp -r "$dir_source/." "$DEST/$name/"
+        fi
+    elif [ "$AGENT" == "gemini" ]; then
         mkdir -p "$DEST/$name"
-        cp -r "$SKILLS_DIR/$name/." "$DEST/$name/"
+        cp "$md_source" "$DEST/$name/SKILL.md"
+        if [ -d "$dir_source" ]; then
+            cp -r "$dir_source/." "$DEST/$name/"
+        fi
     fi
-
-    echo "  -> /$name skill ready"
 }
 
 # ── run ─────────────────────────────────────────────────────────────────────
-if [ -n "$SKILL_FILTER" ]; then
-    install_skill "$SKILL_FILTER"
-else
-    for md in "$SKILLS_DIR"/*.md; do
-        [ -f "$md" ] || continue
-        install_skill "$(basename "$md" .md)"
-    done
-fi
+for md in "$SKILLS_DIR"/*.md; do
+    [ -f "$md" ] || continue
+    install_skill "$(basename "$md" .md)"
+done
 
 echo ""
-echo "Done. Restart Claude Code to pick up new skills."
+echo "Done. Restart your agent to pick up new skills."
